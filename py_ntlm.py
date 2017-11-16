@@ -216,6 +216,7 @@ LISTEN_PORT = 3128
 
 
 def prase_args():
+    global PROXY_IP,PROXY_PORT,LISTEN_IP,LISTEN_PORT
     for i in range(len(sys.argv)):
         if "--proxy" in sys.argv[i]:
             k,v = sys.argv[i].split("=")
