@@ -187,7 +187,7 @@ class ProxyServerProtocol(asyncio.Protocol):
             if not self.client_protocol.transport.is_closing():
                 self.client_protocol.transport.close()
         except Exception as e:
-            log.exception(self.fmt(e,data))
+            log.exception(self.fmt(e))
  
     def eof_received(self):
         try:
@@ -195,7 +195,7 @@ class ProxyServerProtocol(asyncio.Protocol):
             if self.client_protocol.transport.can_write_eof():
                 self.client_protocol.transport.write_eof()
         except Exception as e:
-            log.exception(self.fmt(e,data))
+            log.exception(self.fmt(e))
 
 connect_dict = {}
 async def statistic():
