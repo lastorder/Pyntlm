@@ -13,7 +13,7 @@ def get_method_host(data):
         method,host = ret.group(1),ret.group(2)
     return method,host 
 
-challenge_re = re.compile(rb'Proxy-Authenticate:\s*NTLM\s*(\S*)\s*', re.I)
+challenge_re = re.compile(rb'Proxy-Authenticate: NTLM (\S*)\r\n', re.I)
 def get_challenge(data):
     ret = challenge_re.search(data)
     if ret:
@@ -33,7 +33,6 @@ class ProxyClientProtocol(asyncio.Protocol):
         self.loop = loop
         self.server_protocol = server_protocol
         self.is_ready = False
-        self.challenge  = ''
         
     def fmt(self,*args):
         return self.server_protocol.fmt(*args)
@@ -51,31 +50,23 @@ class ProxyClientProtocol(asyncio.Protocol):
 
     def hand_connect(self,data):
         http_code = data.split(maxsplit=2)[1]
-        if http_code == b'200':
-            self.is_ready = True
-            if self.server_protocol.method == b'CONNECT':
-                self.server_protocol.transport.write(data)
-                log.debug(self.fmt('response write : ',data))
-                return
-            else :
-                self.transport.write(self.server_protocol.cache)
-                log.debug(self.fmt('request write : ',self.server_protocol.cache))
-                self.server_protocol.cache = b''
-                return
-        if not self.challenge :
+        if http_code == b'407':
             challenge = get_challenge(data)
             if challenge:
-                self.challenge = challenge
                 self.try_auth_ntlm(challenge)
                 return
+            else:
+                log.error(self.fmt('auth failed ! data: ',data))
+                self.transport.close()
+                self.server_protocol.transport.close()
 
-        log.error(self.fmt('auth failed ! data: ',data))
-        self.transport.close()
-        self.server_protocol.transport.close()
-
+        self.is_ready = True
+        self.server_protocol.transport.write(data)
+        log.debug(self.fmt('response write : ',data))
 
     def data_received(self, data):
         try:
+            log.debug(self.fmt('client receive : ',data))
             if not self.is_ready :
                 return self.hand_connect(data)
             
@@ -111,14 +102,16 @@ class ProxyClientProtocol(asyncio.Protocol):
 
 
     def try_auth_ntlm(self,challenge = b''):
-        data_tmp = b'CONNECT %s HTTP/1.1\r\n'\
-                   b'proxy-Authorization: NTLM %s\r\n'\
-                   b'Pragma: no-cache\r\n\r\n'
+        append_tmp = b'\r\nproxy-Authorization: NTLM %s\r\n\r\n'
         rep = self.ntlm.get_response(challenge.decode()).encode()
-        host = self.server_protocol.host
-        data = data_tmp%(host, rep)
-        log.debug(self.fmt('auth send : ',data))
-        self.transport.write(data)
+        append = append_tmp%(rep)      
+        tmp = self.server_protocol.cache.split(b'\r\n\r\n',1)
+        
+        auth_data = tmp[0] + append
+        if len(auth_data) == 2:
+            auth_data += tmp[1]       
+        log.debug(self.fmt('auth send : ',auth_data))
+        self.transport.write(auth_data)
 
 
 class ProxyServerProtocol(asyncio.Protocol):
@@ -174,6 +167,7 @@ class ProxyServerProtocol(asyncio.Protocol):
             if not self.client_protocol or not self.client_protocol.is_ready:
                 self.cache += data
             else :
+                log.debug(self.fmt('request write : ',data))
                 self.client_protocol.transport.write(data)
         except Exception as e:
             log.exception(self.fmt(e,data))
