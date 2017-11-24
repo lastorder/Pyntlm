@@ -1,7 +1,10 @@
 import asyncio
 import re
 import sys
+import os
 from datetime import datetime
+
+sys.path.append(os.path.dirname(sys.argv[0]))
 from py_ntlm_mg import NtlmMessageGenerator
 from log_template import log
 
