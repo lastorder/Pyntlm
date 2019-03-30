@@ -15,6 +15,7 @@ except Exception as e:
     ch.setFormatter(formatter)
     ch.setLevel(logging.WARNING)
     log.setLevel(logging.WARNING)
+    log.addHandler(ch)
     
 
         
